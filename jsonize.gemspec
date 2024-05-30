@@ -8,15 +8,15 @@ Gem::Specification.new do |spec|
 
   spec.summary       = %q{Act as as_json for active record model or as a jsonize}
   spec.description   = %q{Act as as_json for active record model or as a jsonize using the cacheable redisize}
-  spec.homepage      = "https://github.com/majioa/jsonize"
+  spec.homepage      = "https://codeberg.org/majioa/jsonize"
   spec.license       = "MIT"
   spec.required_ruby_version = Gem::Requirement.new(">= 2.3.0")
 
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/majioa/jsonize"
-  spec.metadata["changelog_uri"] = "https://github.com/majioa/jsonize/CHANGELOG.md"
+  spec.metadata["source_code_uri"] = "https://codeberg.org/majioa/jsonize"
+  spec.metadata["changelog_uri"] = "https://codeberg.org/majioa/jsonize/CHANGELOG.md"
 
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
