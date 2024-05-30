@@ -34,18 +34,18 @@ module Jsonize
    end
 
    def generate_relation rela, source_in, options
-      source = source_in.is_a?(Hash) ? source_in : source_in.polymorphic? ?
-         {} : required_attibutes(source_in.klass, {})
+      attr_props = source_in.is_a?(Hash) ? source_in : source_in.polymorphic? ?
+         {} : jsonize_scheme_for(source_in.klass, attibute_tree(source_in.klass, options))
 
       case rela
       when Enumerable
          rela.map do |rec|
-            generate_json(rec, source, options)
+            generate_json(rec, attr_props, options)
          end
       when NilClass
          nil
       when Object
-         generate_json(rela, source, options)
+         generate_json(rela, attr_props, options)
       end
    end
 
@@ -57,11 +57,24 @@ module Jsonize
             [props].flatten.reduce(nil) do |r, source|
                case source
                when UnboundMethod
-                  r || source.bind(flow)[]
+                  r ||
+                     begin
+                        source.bind(flow)[]
+                     rescue ActiveModel::MissingAttributeError, TypeError, NoMethodError
+                     rescue Exception => e
+                        $stderr.puts("#{e.class}: #{e.message}")
+                        # binding.pry
+                     end
                when Proc
                   r || source[flow]
                when Hash, ActiveRecord::Reflection::AbstractReflection
-                  generate_relation(r || flow.send(name), source, options)
+                  o = !options[:only] ? options :
+                     options[:only].is_a?(Hash) ? options.merge(only: options[:only][name]) :
+                     options.merge(only: nil)
+
+                  generate_relation(r || flow.respond_to?(name) && flow.send(name) || nil, source, o)
+               when NilClass
+                  r
                else
                   raise
                end
@@ -80,22 +93,33 @@ module Jsonize
          if x.is_a?(Hash)
             x.reduce(h) do |hh, (sub, subattrs)|
                if submodel = model._reflections[sub]&.klass
-                  hh.merge(sub.to_sym => prepare_attributes(submodel, subattrs))
+                  collect_attributes(hh, model, sub, sub.to_sym, prepare_attributes(submodel, subattrs))
                else
                   hh
                end
             end
          else
-            props = [
-               model._reflections[x.to_s],
-               model.instance_methods.include?(x.to_sym) ? model.instance_method(x.to_sym) : nil,
-               (self.class == model ? self.attribute_names : model.attribute_names).
-                  include?(x.to_s) ? ->(this) { this.read_attribute(x) } : nil
-            ].compact
-
-            h.merge(x.to_s.sub(/^_/, '').to_sym => props)
+            collect_attributes(h, model, x, x.to_s.sub(/^_/, '').to_sym, nil)
          end
       end
+   end
+
+   def collect_attributes h, model, name, key, value
+      base = [ ->(this) { this.respond_to?(:read_attribute) ? this.read_attribute("_#{name}") : nil } ]
+
+      props =
+      unless value
+         [model._reflections[name.to_s],
+         model.instance_methods.include?(name.to_sym) ? model.instance_method(name.to_sym) : nil,
+         ->(this) { this.is_a?(Hash) ? this[name] : nil },
+         (self.class == model ? self.attribute_names : model.attribute_names).include?(name.to_s) ?
+         ->(this) { this.respond_to?(:read_attribute) ? this.read_attribute(name) : nil } : nil,
+         ].compact
+      else
+         [value]
+      end
+
+      h.merge(key => base.concat(props))
    end
 
    def attibute_tree klass, options = {}
@@ -147,6 +171,50 @@ module Jsonize
       attr_props = jsonize_scheme_for(self.class, attibute_tree(self.class, options))
 
       generate_json(self, attr_props, options)
+   end
+
+   module Collection
+      def jsonize context = {}
+         method =
+            case self
+            when Hash
+               :redisize_hash
+            when Array
+               :redisize_array
+            end
+
+         send(method) do
+            as_pure_json(context)
+         end
+      end
+
+      def recontext context, key
+         context_only = [context[:only]].flatten(1).reduce(nil) { |r, x| r || (x.is_a?(Hash) ? x[key] : r) }
+         context_except = [context[:except]].flatten(1).reduce(nil) { |r, x| r || (x.is_a?(Hash) ? x[key] : r) }
+
+         context.merge(only: context_only, except: context_except)
+      end
+
+      def as_pure_json context = {}
+         case self
+         when Hash
+            self.map do |key, value_in|
+               new_context = recontext(context, key)
+
+               value = value_in.respond_to?(:as_pure_json) ? value_in.as_pure_json(new_context) : value_in.as_json(new_context)
+
+               [key.to_s, value]
+            end.to_h
+         when Array
+            self.map.with_index do |value_in, index|
+               new_context = recontext(context, index.to_i)
+
+               value_in.respond_to?(:as_pure_json) ? value_in.as_pure_json(new_context) : value_in.as_json(new_context)
+            end
+         else
+            as_json(context)
+         end
+      end
    end
 
    module Relation
