@@ -57,22 +57,21 @@ module Jsonize
             [props].flatten.reduce(nil) do |r, source|
                case source
                when UnboundMethod
-                  r ||
+                  r.nil? ?
                      begin
                         source.bind(flow)[]
                      rescue ActiveModel::MissingAttributeError, TypeError, NoMethodError
                      rescue Exception => e
                         $stderr.puts("#{e.class}: #{e.message}")
-                        # binding.pry
-                     end
+                     end : r
                when Proc
-                  r || source[flow]
+                  r.nil? ? source[flow] : r
                when Hash, ActiveRecord::Reflection::AbstractReflection
                   o = !options[:only] ? options :
                      options[:only].is_a?(Hash) ? options.merge(only: options[:only][name]) :
                      options.merge(only: nil)
 
-                  generate_relation(r || flow.respond_to?(name) && flow.send(name) || nil, source, o)
+                  generate_relation(r.nil? ? (flow.respond_to?(name) ? flow.send(name) : nil) : r, source, o)
                when NilClass
                   r
                else
@@ -108,23 +107,24 @@ module Jsonize
       base = [ ->(this) { this.respond_to?(:read_attribute) ? this.read_attribute("_#{name}") : nil } ]
 
       props =
-      unless value
-         [model._reflections[name.to_s],
-         model.instance_methods.include?(name.to_sym) ? model.instance_method(name.to_sym) : nil,
-         ->(this) { this.is_a?(Hash) ? this[name] : nil },
-         (self.class == model ? self.attribute_names : model.attribute_names).include?(name.to_s) ?
-         ->(this) { this.respond_to?(:read_attribute) ? this.read_attribute(name) : nil } : nil,
-         ].compact
-      else
-         [value]
-      end
+         unless value
+            [model._reflections[name.to_s],
+            model.instance_methods.include?(name.to_sym) ? model.instance_method(name.to_sym) : nil,
+            ->(this) { this.is_a?(Hash) ? this[name] : nil },
+            (self.class == model ? self.attribute_names : model.attribute_names).include?(name.to_s) ?
+               ->(this) { this.respond_to?(:read_attribute) ? this.read_attribute(name) :
+                          this.respond_to?(name) ? this.send(name) : nil } : nil,
+            ].compact
+         else
+            [value]
+         end
 
       h.merge(key => base.concat(props))
    end
 
    def attibute_tree klass, options = {}
       options[:only] ||
-      jsonize_attributes_except(self.class == klass ? self.attribute_names : klass.attribute_names,
+         jsonize_attributes_except(self.class == klass ? self.attribute_names : klass.attribute_names,
          options[:except] || default_except_attributes)
    end
 
