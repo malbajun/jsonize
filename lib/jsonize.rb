@@ -67,11 +67,15 @@ module Jsonize
                when Proc
                   r.nil? ? source[flow] : r
                when Hash, ActiveRecord::Reflection::AbstractReflection
-                  o = !options[:only] ? options :
-                     options[:only].is_a?(Hash) ? options.merge(only: options[:only][name]) :
-                     options.merge(only: nil)
+                  if r.nil?
+                     o = !options[:only] ? options :
+                        options[:only].is_a?(Hash) ? options.merge(only: options[:only][name]) :
+                        options.merge(only: nil)
 
-                  generate_relation(r.nil? ? (flow.respond_to?(name) ? flow.send(name) : nil) : r, source, o)
+                     generate_relation(flow.respond_to?(name) ? flow.send(name) : nil, source, o)
+                  else
+                     r
+                  end
                when NilClass
                   r
                else
