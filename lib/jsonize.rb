@@ -95,8 +95,15 @@ module Jsonize
       attrs.reduce({}) do |h, x|
          if x.is_a?(Hash)
             x.reduce(h) do |hh, (sub, subattrs)|
-               if submodel = model._reflections[sub]&.klass
-                  collect_attributes(hh, model, sub, sub.to_sym, prepare_attributes(submodel, subattrs))
+               case subattrs
+               when Hash, Array
+                  if submodel = model._reflections[sub]&.klass
+                     collect_attributes(hh, model, sub, sub.to_sym, prepare_attributes(submodel, subattrs))
+                  else
+                     collect_attributes(hh, model, sub, sub.to_sym, nil)
+                  end
+               when Symbol, String
+                  collect_attributes(hh, model, subattrs.to_s, sub.to_sym, nil)
                else
                   hh
                end
