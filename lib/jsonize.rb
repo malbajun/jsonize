@@ -60,9 +60,9 @@ module Jsonize
                   r.nil? ?
                      begin
                         source.bind(flow)[]
-                     rescue ActiveModel::MissingAttributeError, TypeError, NoMethodError
+                     rescue ActiveModel::MissingAttributeError, TypeError, NoMethodError => e
                      rescue Exception => e
-                        $stderr.puts("#{e.class}: #{e.message}")
+                        $stderr.puts("#{e.class}[#{source}]: #{e.message}")
                      end : r
                when Proc
                   r.nil? ? source[flow] : r
